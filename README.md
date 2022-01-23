@@ -38,10 +38,10 @@ Push or pop operations on `null_terminated_vector`s are more time-consuming than
 Here is an example of the second method.
 
 ```c++
-    null_terminated_vector<T> a{1, 2, 3, 4};
-    vector<T> b;
-    a.convert_to(b);
-    b.push(5);
-    b.push(6);
-    a = b;
+  null_terminated_vector<T> a{1, 2, 3, 4};
+  vector<T> b;
+  a.convert_to(b);
+  b.push(5);
+  b.push(6);
+  a = b;
 ```
