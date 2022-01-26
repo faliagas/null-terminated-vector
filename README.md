@@ -27,6 +27,9 @@ The first returns the element to be considered the *null terminator*, and the se
 
 Helper classes eliminating the need for explicit definition of `null_terminated_vector` classes for simple types and pointers, are provided.
 
+The following methods have been removed form `null_terminated_vector`:
+
+
 ## Performance considerations
 
 Push or pop operations on `null_terminated_vector`s are more time-consuming than on `std::vectors` as each involves a memory relocation. With almost immutable or with small vectors, this does not incur any sensible performance penalties. In all other cases, we can fix this issue in one of two ways.

@@ -289,15 +289,16 @@ namespace i1
    *  <a href="tables.html#68">optional sequence requirements</a> with the
    *  %exception of @c push_front and @c pop_front.
    *
-   *  In some terminology a %null_terminated_vector can be described as a dynamic
-   *  C-style array, it offers fast and efficient access to individual
-   *  elements in any order and saves the user from worrying about
-   *  memory and size allocation.  Subscripting ( @c [] ) access is
-   *  also provided as with C-style arrays.
-  */
+   *  In some terminology a %null_terminated_vector can be described
+   *  as a dynamic C-style array. It offers fast and efficient access
+   *  to individual elements in any order and saves the user from
+   *  worrying about memory and size allocation. Subscript ( @c [] )
+   *  access is also provided as with C-style arrays.
+   */
   template<typename _Tp, typename _Alloc = std::allocator<_Tp> >
     class null_terminated_vector : protected _Vector_base<_Tp, _Alloc>
     {
+    protected:
 #ifdef _GLIBCXX_CONCEPT_CHECKS
       // Concept requirements.
       typedef typename _Alloc::value_type                _Alloc_value_type;
@@ -412,7 +413,7 @@ namespace i1
       explicit
       null_terminated_vector(size_type __n,
                              const allocator_type& __a = allocator_type())
-      : _Base(_S_check_init_len(__n+1, __a), __a)
+      : _Base(_S_check_init_len(__n+1, __a), __a) // TODO check!
       {
         _M_default_initialize(__n);
       }
@@ -468,7 +469,12 @@ namespace i1
        *  The contents of the moved instance are a valid, but unspecified
        *  %null_terminated_vector.
        */
-      null_terminated_vector(null_terminated_vector&&) noexcept = default;
+      null_terminated_vector(null_terminated_vector&& __r) noexcept// = default;
+      : _Base(1, allocator_type())
+      {
+        _M_default_initialize(0);
+        this->swap(__r);
+      }
 
       /**  Copy constructor with alternative allocator */
       null_terminated_vector(const null_terminated_vector& __x,
@@ -700,6 +706,21 @@ namespace i1
         }
       };
 
+      /**
+       *  @brief Move constructor @c from std::vector
+       *
+       *  The newly-created %null_terminated_ptr_vector contains the
+       *  exact contents of the moved instance.
+       *  The contents of the moved instance are a valid, but unspecified
+       *  %vector.
+       */
+      null_terminated_vector(std::vector<value_type, _Alloc>&& __x) noexcept
+      : _Base(1, allocator_type())
+      {
+        _M_default_initialize(0);
+        *this = std::move(__x);
+      }
+
       null_terminated_vector&
       operator=(std::vector<_Tp, _Alloc>&& __x) noexcept
       {
@@ -918,9 +939,15 @@ namespace i1
       {
         const auto __size = size();
         if (__new_size > __size)
-          _M_default_append(__new_size - __size);
+        {
+          // _M_default_append(__new_size - __size);
+          value_type __def;
+          this->insert(this->begin() + __size, __new_size - __size, __def);
+        }
         else if (__new_size < __size)
+        {
           _M_erase_at_end(this->_M_impl._M_start + __new_size, __size);
+        }
       }
 
       /**
@@ -948,7 +975,7 @@ namespace i1
 
       /**  A non-binding request to reduce capacity() to size().  */
       void
-      shrink_to_fit()
+      shrink_to_fit() // TODO remove
       { _M_shrink_to_fit(); }
 
       /**
@@ -985,7 +1012,7 @@ namespace i1
        *  and copying of %null_terminated_vector data.
        */
       void
-      reserve(size_type __n);
+      reserve(size_type __n); // TODO remove
 
       // element access
       /**
@@ -1032,10 +1059,11 @@ namespace i1
       _M_range_check(size_type __n) const
       {
         if (__n >= this->size())
-          __throw_out_of_range_fmt(__N("null_terminated_vector::_M_range_check: __n "
-                                       "(which is %zu) >= this->size() "
-                                       "(which is %zu)"),
-                                   __n, this->size());
+          std::__throw_out_of_range_fmt(
+              __N("null_terminated_vector::_M_range_check: __n "
+                  "(which is %zu) >= this->size() "
+                  "(which is %zu)"),
+              __n, this->size());
       }
 
     public:
@@ -1511,7 +1539,9 @@ namespace i1
           for (; __first != __last && !__cur->is_null(); ++__cur, (void)++__first)
             *__cur = *__first;
           if (__first == __last)
-            _M_erase_at_end(__cur);
+            // _M_erase_at_end(__cur);
+            _M_erase_at_end(__cur, __cur.back_size()
+                                   + (__cur - this->_M_impl._M_start));
           else
             _M_range_insert(end(), __first, __last,
                             std::__iterator_category(__first));
@@ -1539,7 +1569,6 @@ namespace i1
       // to be the same thing.
       void
       _M_fill_assign(size_type __n, const value_type& __val)
-      //
       {
         null_terminated_vector __tmp(__n, __val, _M_get_Tp_allocator());
         __tmp._M_impl._M_swap_data(this->_M_impl);
@@ -1638,14 +1667,61 @@ namespace i1
       // Called by insert(p,n,x), and the range insert when it turns out to be
       // the same thing.
       void
-      _M_fill_insert(iterator __pos, size_type __n, const value_type& __x);
+      _M_fill_insert(iterator __position, size_type __n, const value_type& __x)
+      {
+        if (__n != 0)
+          {
+            const size_type __elems_before = __position - begin();
+            const size_type __elems_after = __position.back_size();
+            const size_type __size = __elems_before + __elems_after;
+            const size_type __len = __size + __n;
+              // _M_check_len(__n, "vector::_M_fill_insert"); // TODO
+            pointer __new_start(this->_M_allocate(__len+1));
+            pointer __new_finish(__new_start);
+            __try
+              {
+                // See _M_realloc_insert
+                std::__uninitialized_fill_n_a(__new_start + __elems_before,
+                                              __n, __x,
+                                              _M_get_Tp_allocator());
+                __new_finish = pointer();
+                __new_finish
+                  = std::__uninitialized_move_if_noexcept_a
+                  (this->_M_impl._M_start, __position.base(),
+                   __new_start, _M_get_Tp_allocator());
+                __new_finish += __n;
+                __new_finish
+                  = std::__uninitialized_move_if_noexcept_a
+                  (__position.base(), __position.base() + __elems_after+1,
+                   __new_finish, _M_get_Tp_allocator());
+              }
+            __catch(...)
+              {
+                if (!__new_finish)
+                  std::_Destroy(__new_start + __elems_before,
+                                __new_start + __elems_before + __n,
+                                _M_get_Tp_allocator());
+                else
+                  std::_Destroy(__new_start, __new_finish,
+                                _M_get_Tp_allocator());
+                _M_deallocate(__new_start, __len+1);
+                __throw_exception_again;
+              }
+            std::_Destroy(this->_M_impl._M_start,
+                          this->_M_impl._M_start + __size+1,
+                          _M_get_Tp_allocator());
+            _GLIBCXX_ASAN_ANNOTATE_REINIT;
+            _M_deallocate(this->_M_impl._M_start, __size+1);
+            this->_M_impl._M_start = __new_start;
+          }
+      }
 
       // Called by resize(n).
       void
       _M_default_append(size_type __n);
 
       bool
-      _M_shrink_to_fit();
+      _M_shrink_to_fit(); // TODO remove
 
       // A value_type object constructed with _Alloc_traits::construct()
       // and destroyed with _Alloc_traits::destroy().
@@ -1678,7 +1754,7 @@ namespace i1
       // reallocate or move existing elements. _Arg is either _Tp& or _Tp.
       template<typename _Arg>
         void
-        _M_insert_aux(iterator __position, _Arg&& __arg);
+        _M_insert_aux(iterator __position, _Arg&& __arg); // TODO remove
 
       template<typename... _Args>
         void
@@ -1743,7 +1819,6 @@ namespace i1
           this->_M_impl._M_start = __new_start;
         }
 
-      // Either move-construct at the end, or forward to _M_insert_aux.
       iterator
       _M_insert_rval(const_iterator __position, value_type&& __v)
       {
@@ -1752,7 +1827,6 @@ namespace i1
         return iterator(this->_M_impl._M_start + __n);
       }
 
-      // Try to emplace at the end, otherwise forward to _M_insert_aux.
       template<typename... _Args>
         iterator
         _M_emplace_aux(const_iterator __position, _Args&&... __args)
@@ -1767,9 +1841,9 @@ namespace i1
       _M_emplace_aux(const_iterator __position, value_type&& __v)
       { return _M_insert_rval(__position, std::move(__v)); }
 
-      // Called by _M_fill_insert, _M_insert_aux etc.
+      // Called by _M_fill_insert etc.
       size_type
-      _M_check_len(size_type __n, const char* __s) const
+      _M_check_len(size_type __n, const char* __s) const // TODO read
       {
         if (max_size() - size() < __n)
           std::__throw_length_error(__N(__s));
@@ -1780,7 +1854,7 @@ namespace i1
 
       // Called by constructors to check initial size.
       static size_type
-      _S_check_init_len(size_type __n, const allocator_type& __a)
+      _S_check_init_len(size_type __n, const allocator_type& __a) // TODO read
       {
         if (__n > _S_max_size(_Tp_alloc_type(__a)))
           std::__throw_length_error(
@@ -1817,6 +1891,19 @@ namespace i1
           }
       }
 
+      void
+      _M_erase_at_end(pointer __pos, size_type __size) _GLIBCXX_NOEXCEPT
+      {
+        size_type __n = __size - (__pos - this->_M_impl._M_start);
+        if (__n)
+          {
+            std::swap(__pos[0], __pos[__n]);
+            std::_Destroy(__pos + 1, __pos + (__n+1),
+                          _M_get_Tp_allocator());
+            _GLIBCXX_ASAN_ANNOTATE_SHRINK(__n);
+          }
+      }
+
       iterator
       _M_erase(iterator __position)
       {
@@ -1836,7 +1923,10 @@ namespace i1
             const auto __n = __last.back_size();
             if (__n) // __last != end()
               _GLIBCXX_MOVE3(__last, __last + (__n+1), __first);
-            _M_erase_at_end(__first.base() + __n);
+            const size_type __size = (__first + __n).back_size() +
+                                     (__first.base() - begin().base() + __n);
+            // _M_erase_at_end(__first.base() + __n);
+            _M_erase_at_end(__first.base() + __n, __size);
           }
         return __first;
       }

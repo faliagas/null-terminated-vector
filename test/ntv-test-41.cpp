@@ -1,30 +1,18 @@
 #include <iostream>
-#include "nullTerminatedVector.hpp"
+#include "nullTerminatedIntVector.hpp"
 
 using namespace std;
 
 template<typename T>
-ostream& operator<<(ostream& os, const i1::null_terminated_vector<T>& a) {
+ostream& operator<<(ostream& os, const i1::null_terminated_int_vector<T>& a) {
   for (const auto& x : a) os << x << " ";
-  return os;
-}
-
-struct B {
-  int i;
-  static constexpr B null_terminator() noexcept {return B{-1000000};}
-  bool is_null() const noexcept {return i == null_terminator().i; }
-  B& operator=(int n) noexcept { i = n; return *this; }
-};
-
-ostream& operator<<(ostream& os, const B& b) {
-  os << b.i;
   return os;
 }
 
 int main()
 {
-  i1::null_terminated_vector<B> a(10);
-  cout << "size of std::vector:            " << sizeof(std::vector<B>) << endl;
+  i1::null_terminated_int_vector<int> a(10);
+  cout << "size of std::vector:            " << sizeof(std::vector<int>) << endl;
   cout << "size of null_terminated_vector:  " << sizeof(a) << endl;
 
   cout << "create vector a with 10 elements:" << endl;
@@ -33,7 +21,7 @@ int main()
 
   cout << "assign value to each element:" << endl;
   for (size_t i = 0; i < 10; ++i)
-    a[i] = B{(int)i};
+    a[i] = (int)i;
   cout << a << endl;
   cout << "first 5 elements of vector a:" << endl;
   for (size_t i = 0; i < 5; ++i)
